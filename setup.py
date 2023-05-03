@@ -1,7 +1,8 @@
 from setuptools import setup
+from flounder import flounder
 
 setup(name='mermaid-flounder',
-      version='1.0.0a1',
+      version=flounder.VER,
       description='Automation tools for Mermaid diagram',
       author='ForestHouse',
       author_email='foresthouse2316@gmail.com',
