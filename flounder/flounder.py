@@ -9,19 +9,22 @@ INITIAL_TEMPLATE = f'```mermaid\n\n{END_OF_CLASS}\n\n{END_OF_LINK}```'
 
 class Flounder:
 
-    def __init__(self, path):
+    def __init__(self, path, encoding='UTF8'):
         self.md = ''
         self.path = path
+        self.encoding = encoding
         try:
-            with open(path, 'r') as f:
+            with open(path, 'r', encoding=encoding) as f:
                 self.md = f.read()
-                if self.md.index(END_OF_CLASS) == -1 or self.md.index(END_OF_LINK) == -1:
-                    raise SyntaxError(f'The file {path} does not have indicator of flounder')
+                self.md.index(END_OF_CLASS)
+                self.md.index(END_OF_LINK)
         except FileNotFoundError:
             self._print('Making a new mermaid markdown file to write. . .')
-            with open(path, 'w') as f:
+            with open(path, 'w', encoding=encoding) as f:
                 f.write(INITIAL_TEMPLATE)
             self.md = INITIAL_TEMPLATE
+        except ValueError:
+            raise SyntaxError(f'The file "{path}" does not have the flounder indicator')
 
 
     @staticmethod
@@ -29,9 +32,7 @@ class Flounder:
         print(f'{TAG} {msg}')
 
 
-
-
-    def add_to(self, indicator, text):
+    def _add_to(self, indicator, text):
         try:
             start_idx = self.md.index(indicator)
             self.md = self.md[:start_idx] + text + '\n' + self.md[start_idx:]
@@ -40,40 +41,60 @@ class Flounder:
 
 
     @classmethod
-    def split_AB(cls, line: str):
-        if len(line.split('>')) != 2:
-            cls.syntax_error(line)
+    def _split_layers(cls, line: str):
+        """
+        Split the layers devided by '>' character
+        :param line: Interpretable line
+        :return: 2D Array consisted with each layer and individual class name
+        """
+        if len(line.split('>')) < 2:
+            cls._syntax_error(line)
             return [], []
-        A, B = line.split('>')
-        return [A.strip().split(' '), B.strip().split(' ')]
+        layers = line.split('>')
+        return list(map(lambda x: x.strip().split(' '), layers))
+        # return [A.strip().split(' '), B.strip().split(' ')]
 
 
-    @classmethod
-    def combine_AB(cls, line: str, link: str):
+    def _link(self, line: str, link: str):
+        """
+        Interpret the line and make links
+        :param line: Interpretable line
+        :param link: Kind of link
+        """
         result = ''
-        A, B = cls.split_AB(line)
+        A, B = self._split_layers(line)
         if not len(A) and not len(B):
-            cls.syntax_error(line)
+            self._syntax_error(line)
             return False
         for a in A:
             for b in B:
                 result += f'{a} {link} {b}\n'
-        return result
+        self._add_to(END_OF_LINK, result)
+
+
+
 
 
     def save(self):
+        """
+        Save field content to designated file (path)
+        """
         try:
-            with open(self.path, 'w') as f:
+            with open(self.path, 'w', encoding=self.encoding) as f:
                 f.write(self.md)
         except Exception:
             self._print("Error occurred at saving file")
 
     @classmethod
-    def syntax_error(cls, line):
+    def _syntax_error(cls, line):
+        """
+        Print error message
+        :param line: Line content that caused this error
+        """
         cls._print("Syntax Error : " + line)
 
 
-    def enter_editing_mode(self):
+    def edit(self):
         # TODO | > A 또는 | A > 등의 전체 지칭 만들기
         """
         class >>> [] NAME DESCRIPTION
@@ -82,7 +103,9 @@ class Flounder:
 
         dot-link >>> & D1 D2 D3 Dn > T1 T2 T3 Tn
 
-        delete >>> ! D1 D2 D3 Dn > T1 T2 T3 Tn
+        delete link >>> ! D1 D2 D3 Dn > T1 T2 T3 Tn
+
+        delete class >>> ! NAME
         """
 
         cmd = input(f'{TAG} >>> ')
@@ -94,18 +117,18 @@ class Flounder:
                     cut = cmd.index(' ')
                     name = cmd[:cut]
                     description = cmd[cut+1:]
-                    self.add_to(END_OF_CLASS, f'class {name} {{\n'
+                    self._add_to(END_OF_CLASS, f'class {name} {{\n'
                                               f'{description}\n'
                                               f'}}')
                 elif cmd[0] == '|':
                     cmd = cmd[1:].strip()
-                    self.add_to(END_OF_LINK, self.combine_AB(cmd, LINK))
+                    self._link(cmd, LINK)
                 elif cmd[0] == '&':
                     cmd = cmd[1:].strip()
-                    self.add_to(END_OF_LINK, self.combine_AB(cmd, DOT_LINK))
+                    self._link(cmd, DOT_LINK)
                 elif cmd[0] == '!':
                     cmd = cmd[1:].strip()
-                    A, B = self.split_AB(cmd)
+                    A, B = self._split_layers(cmd)
                     for a in A:
                         for b in B:
                             self.md = re.sub('\n* *(' + a + ') *[.-]{2}> *(' + b + ')', '', self.md)
